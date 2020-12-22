@@ -1,0 +1,75 @@
+---
+title: "Terrible Christmas Plot"
+author: "Lily FitzGibbon"
+date: "22/12/2020"
+output: pdf_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(showtext)
+library(ggplot2)
+
+# add a kitsch Christmas font (from Google: https://fonts.google.com/specimen/Mountains+of+Christmas) 
+font_add_google(name = "Mountains of Christmas")
+showtext_auto()
+
+# load a Christmassy colour palette (colours from here: https://www.schemecolor.com/christmas-party.php)
+xmas_cols <- c("#003F2E", "#018667", "#F8E19E", "#D5AD56", "#FFCA58", "#FF3213")
+
+# load the simulated data
+load("simulated_data.RData")
+```
+
+## Simulate the dataset  
+This part of the process in not evaluated because it requires access to the initial dataset (that does not belong to me). I wanted to create a new dataset that had the same properties in terms of the relationship between variables and their variance at the within and between participant levels. To do this, I ran linear mixed effects models predicting each variable with random intercepts and slopes for participants. I then used these models to simulate a new dataset with the same properties. Finally, I created the participant-mean-centered variables for the plot.
+  
+
+```{r simulate data, eval=F}
+set.seed(101)
+# start by taking record ids and test days from the original dataset
+simu <- data[!is.na(data$pmc_goal_qs) & !is.na(data$pmc_perc_correct),c("record_id", "day")]
+
+# use the predict() function to predict new data with the same structure, relationships and variance of our plot variables
+simu$goal_qs <- scale(predict(lmer(data=data[!is.na(data$goal_qs) & !is.na(data$perc_correct),], goal_qs~scale(as.numeric(day))+ (scale(as.numeric(day))|record_id))), center=F)
+simu$perc_correct <- predict(lmer(data=data[!is.na(data$goal_qs) & !is.na(data$perc_correct),], formula = scale(perc_correct, center=F) ~ scale(goal_qs, center=F) + scale(as.numeric(day))+ (scale(goal_qs, center=F)+ scale(as.numeric(day))|record_id)))
+
+
+# ID mean center variables
+simu$perc_correct_pmc <- unlist(lapply(split(simu, simu$record_id), function(ppt_dat){ scale(ppt_dat$perc_correct, scale=F) }))
+simu$goal_qs_pmc <- unlist(lapply(split(simu, simu$record_id), function(ppt_dat){ scale(ppt_dat$goal_qs, scale=F) }))
+
+save(simu, file = "simulated_data.RData")
+
+```
+
+
+## Terrible plot  
+
+I made this plot while trying to visualise individual differences in the effect of goal magnitude on performance. As a standard ggplot it looked like a nice pompom, but was not very useful for understanding the data. I thought I would have a bit of fun adding a Christmas theme for the terrible plots competition.
+  
+
+```{r plot}
+ggplot(data=simu, 
+       aes(x=goal_qs_pmc, 
+           y=perc_correct_pmc, 
+           col=factor(record_id)))+
+  geom_point(col="white", 
+             alpha=0.2, 
+             shape=8)+ # shape 8 is an asterisk shape that looks a bit like a snowflake
+  stat_smooth(method="lm", 
+              se=F,
+              formula = y~x)+
+  scale_color_manual(guide=F, 
+                     values = sample(xmas_cols, 345, T))+ # there aren't enough colours in the palette for the 345 participants so the six colours are sampled 345 times
+  theme_classic()+
+  theme(panel.background = element_rect(fill = "#2B2F77"),
+        text = element_text(family = "Mountains of Christmas"))+
+  labs(x="Goal (mean centred)", 
+       y="Percent correct (mean centred)", 
+       title="Individual differences in the relationship between goal magnitude and performance")
+
+ggsave("terrible_plot.png")
+
+```
+
